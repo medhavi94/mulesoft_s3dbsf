@@ -1,0 +1,1254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:dbserver="http://www.mulesoft.org/schema/mule/dbserver"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools  http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+http://www.mulesoft.org/schema/mule/dbserver http://www.mulesoft.org/schema/mule/dbserver/current/mule-dbserver.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<munit:config name="commonUtils-test-suite.xml" />
+	<db:config name="Test_Database_Config" doc:name="Database Config" doc:id="83ac38e6-8792-4de2-9e76-6674a0ddfa86" >
+		<db:generic-connection url="jdbc:h2:mem:schema1" driverClassName="org.h2.Driver" />
+	</db:config>
+	<dbserver:config name="MUnit_DB_Server_Config_Account" doc:name="MUnit DB Server Config" doc:id="2962676a-405c-475b-8a94-374718d36ea1" >
+		<dbserver:connection connectionStringParameters="MODE=MYSQL" database="schema1" csv="account.csv;contacts.csv"/>
+	</dbserver:config>
+	<munit:test name="test-getJobLock-StartTimeTest" doc:id="67643d41-642d-4716-89c4-912726b0ccf5" description="Test">
+		<munit:behavior>
+			<set-variable value="S3toDB" doc:name="objectName" doc:id="6fddcf3d-1a9a-4339-b9a9-68e0eed066e5" variableName="objectName"/>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="88dd3a83-000b-49df-9dc3-ca7f360e66e9" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select jobLock from control table" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="d771c3af-f2ff-4ce3-b1d7-939f27f2885d" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+	[
+		{
+		 'JobLock':'0',
+		'FromDate':'2020-07-19 06:00:00'
+}
+]
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow-ref to getJobLock-StartTime" doc:id="b3827da3-ff8d-450b-a3b2-6abafe3cd4e6" name="getJobLock-StartTime"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="5e816ae0-daca-46b3-a901-1a6e414cd45f" message="Flow fails in getting JobLock data from database " expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-S3ToDB_insertInAudit" doc:id="cea88c4a-7eaa-4815-b6f9-9baaa5ee971a" >
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	{
+		fname : 'test1',
+		lname : 'test1',
+		accountId : '1',
+		email : 'a@a.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test2',
+		lname : 'test2',
+		accountId : '2',
+		email : 'b@b.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	}
+]]" doc:name="InvalidContacts" doc:id="5b661455-5407-4241-83ba-4a1ade03e899" variableName="InvalidContacts"/>
+			<set-variable value="S3toDB" doc:name="objectName" doc:id="c08c3446-3ecc-4f3d-92ac-c0d8009dcbd5" variableName="objectName"/>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="c1304027-92ca-47be-a246-3482844cdb62" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Bulk insert" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="334186f0-6366-4d55-b4a2-ca37b20349b3" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="1ef81467-878c-4fb7-bf9b-9c9f4f31f1c4" name="insertInAuditForS3"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="9004433c-52d1-4727-9f28-d3aa7972d600" actual="#[payload]" expected="#[1]" message="bulk insert tested successfully"/>
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="test-DBtoS3_insertInAudit" doc:id="63b6d006-aa90-4606-9309-91fcd914d58d" >
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	{
+	'firstName' : 'Test1',
+	'lastName' : 'Test1',
+	'accountId' : '1',
+	'email' : 'a@a.com',
+	'phone' : '9999999999',
+	'Id' : ''
+	},
+	{
+	'firstName' : 'Test2',
+	'lastName' : 'Test2',
+	'accountId' : '2',
+	'email' : 'b@b.com',
+	'phone' : '9999999999',
+	'Id' : '2'
+	}
+]]" doc:name="InvalidContacts" doc:id="aa4db7cb-0bcd-4d8f-9dd1-992d4f063678" variableName="InvalidContacts"/>
+			<set-variable value="DBtoSF" doc:name="objectName" doc:id="1c4cec14-0462-4624-958a-3addaa094101" variableName="objectName"/>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="6bc23f94-0d10-48e3-a228-96707d93ed63" processor="db:bulk-insert">
+				<!-- <munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="Bulk insert" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="334186f0-6366-4d55-b4a2-ca37b20349b3" attributeName="doc:id" />
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes> -->
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Bulk insert" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="88cd2aff-8fb8-4774-983a-3e775a066a9a" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="4e89ec85-b4c3-418b-8243-8206a97513d8" name="insertInAuditForDB"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="754f027c-1d35-42c5-b4bf-ff0e1b020972" actual="#[payload]" expected="#[1]" message="bulk insert tested successfully"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-insertInContact" doc:id="8be59600-6866-4ba1-b70f-3584281f418f" >
+		<munit:behavior >
+			<set-payload value="#[output application/json
+---
+[
+	{
+		fname : 'test1',
+		lname : 'test1',
+		accountId : '1',
+		email : 'a@a.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test2',
+		lname : 'test2',
+		accountId : '2',
+		email : 'b@b.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	}
+]]" doc:name="Set Payload" doc:id="ed9221aa-6ea6-4dff-ac39-01cd4402e1c7" />
+			<munit-tools:mock-when doc:name="Mock when" doc:id="8cbe5915-ff47-44da-99a3-fc645354fa35" processor="db:bulk-insert">
+				<!-- <munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="insert new contacts" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="105ecdf4-eba5-4b64-9aa0-9b08d0a481e0" attributeName="doc:id" />
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes> -->
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+				<!-- <munit-tools:then-return>
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return> -->
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="6a61b75d-3b31-46a6-9c93-63d24ef9af28" name="insert_in_contact"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="85c85f7b-262e-44b3-959b-9abdf66befad" actual="#[payload]" expected="#[1]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-insertInContact-null_payload" doc:id="2b0ae821-ef75-4d8f-9f2c-89436c22db54" >
+		<munit:behavior >
+			<munit:set-null-payload doc:name="Set null payload" doc:id="268c2ef9-fc48-4b8f-873a-1e726644793c" />
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="f8e1fd4e-b3de-45af-9025-59c7e38ea11c" name="insert_in_contact"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="c436d32d-5849-4180-b8f7-2ba5fb6c1722" actual="#[payload]" expected='#["No new contact found to insert"]' message="failes for null payload"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-validateContactsForS3" doc:id="f863c566-7ffc-4bef-b79f-143561477b58" tags="db">
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	{
+		fname : 'test1',
+		lname : 'test1',
+		accountId : '0012x000003satJAAQ',
+		email : 'a@a.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test2',
+		lname : 'test2',
+		accountId : '2',
+		email : 'b@b.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test3',
+		lname : 'test3',
+		accountId : '',
+		email : 'c@c.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	}
+]]" doc:name="contactsFromS3" doc:id="fbb9dfdf-cdb9-41fd-941c-f8078e496880" variableName="contactsFromS3"/>
+			
+			<munit-tools:mock-when doc:name="Mock when select accountId" doc:id="64b89b7e-5b91-4022-9da2-464437084067" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select accountIds from account" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="397cf0f6-6a8b-47f7-8b29-af865ee651d2" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+[
+{
+	'AccountId':&quot;0012x000003satJAAQ&quot;
+},
+{
+	'AccountId':&quot;0012x000003satHAAQ&quot;
+},
+{
+	'AccountId':&quot;2&quot;
+},
+{
+	'AccountId':&quot;3&quot;
+},
+{
+	'AccountId':&quot;4&quot;
+}
+]
+
+
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when BulkInsert" doc:id="0f863637-04a4-45de-a1d3-0c8afd2b08bf" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Bulk insert" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="334186f0-6366-4d55-b4a2-ca37b20349b3" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="9feae56a-48d1-4319-9f9d-1d7ac860b6df" name="validateContactsForS3"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="4ef92517-2d23-4bda-b8ca-d8d8d9509371" actual="#[payload]" expected="#[1]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-goto-contacts-processing" doc:id="b690cda8-732a-475a-bdff-60ccdb3a8ad0" >
+		<munit:behavior>
+			<set-variable value="#[output application/json
+---
+[
+	{
+		fname : 'test1',
+		lname : 'test1',
+		accountId : '0012x000003satJAAQ',
+		email : 'a@a.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test2',
+		lname : 'test2',
+		accountId : '2',
+		email : 'b@b.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test3',
+		lname : 'test3',
+		accountId : '3',
+		email : 'd@d.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test4',
+		lname : 'test4',
+		accountId : '120',
+		email : 'c@c.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test14',
+		lname : 'test14',
+		accountId : '4',
+		email : 'ac@ac.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	}
+]]" doc:name="validContacts" doc:id="90ca41d9-1a12-472d-835d-ba7fc2fa055e" variableName="validContacts"/>
+			<munit-tools:mock-when doc:name="Mock when select email, accountId from account" doc:id="50e6ead0-dd2d-4fec-a996-65ca3e30fbb9" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select email and accountId from Contact" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="46fbb41a-8897-46fb-9af2-ccf38759e934" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+[
+{
+	'accountsId':&quot;0012x000003satJAAQ&quot;,
+	'email':'a@a.com'
+},
+{
+	'accountsId':&quot;2&quot;,
+	'email':'b@b.com'
+},
+{
+	'accountsId':&quot;3&quot;,
+	'email':'c@c.com'
+},
+{
+	'accountsId':&quot;4&quot;,
+	'email':'d@d.com'
+}
+]
+
+
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when bulk insert" doc:id="30ea7cee-9c30-4ef1-9afa-7432e1f0fdf2" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when bulk update" doc:id="42b76347-cd3a-4f51-a03f-f6a0aa3f6fe8" processor="db:bulk-update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="4ac19a4c-b082-4c62-bb0e-3d2b63f48453" name="goto_contacts_processing"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="683e11be-bc58-417a-93d1-3e7a769997f1" actual="#[payload]" expected="#[1]" message="test run for insert/update contact successful"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-goto-contact-processing-2" doc:id="67bd90a2-cc38-413b-9b23-d75dc23eed20" >
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	{
+		fname : 'test1',
+		lname : 'test1',
+		accountId : '0012x000003satJAAQ',
+		email : 'a@a.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test2',
+		lname : 'test2',
+		accountId : '2',
+		email : 'b@b.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	},
+	{
+		fname : 'test4',
+		lname : 'test4',
+		accountId : '120',
+		email : 'c@c.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	}
+]]" doc:name="validContacts" doc:id="0e54987e-0cfb-47c4-816a-6744705db608" variableName="validContacts"/>
+			
+			<munit-tools:mock-when doc:name="Mock when select email, accountId from account" doc:id="f2ae609d-7f12-4202-8bc3-11dbab78b6e0" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select email and accountId from Contact" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="46fbb41a-8897-46fb-9af2-ccf38759e934" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+[
+{
+	'accountsId':&quot;0012x000003satJAAQ&quot;,
+	'email':'a@a.com'
+},
+{
+	'accountsId':&quot;2&quot;,
+	'email':'b@b.com'
+},
+{
+	'accountsId':&quot;3&quot;,
+	'email':'c@c.com'
+},
+{
+	'accountsId':&quot;4&quot;,
+	'email':'d@d.com'
+}
+]
+
+
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			
+</munit-tools:mock-when>
+			
+			<munit-tools:mock-when doc:name="Mock when bulk insert" doc:id="9847c742-edc4-44a9-bb45-0f0e385fd18e" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when bulk update" doc:id="af2445c8-0037-45d0-86be-072b93e50558" processor="db:bulk-update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="3f818acd-98b2-4934-b97d-bfaca42cc8b7" name="goto_contacts_processing"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="f344f45b-6539-4407-9c00-ce57cbd21e26" actual="#[payload]" expected="#[1]" message="test no insert contacts successful"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-goto-contact-processing-3" doc:id="6bba585a-3a49-47e7-a1ca-4d8015c4a4f9" >
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	{
+		fname : 'test5',
+		lname : 'test5',
+		accountId : '5',
+		email : 'e@e.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	}
+]]" doc:name="validContacts" doc:id="8bc8a81e-7043-4ac5-8289-a488c5d0d065" variableName="validContacts"/>
+			
+			<munit-tools:mock-when doc:name="Mock when select email, accountId from account" doc:id="02a7f5aa-07a3-4b46-9229-1c52947ad811" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select email and accountId from Contact" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="46fbb41a-8897-46fb-9af2-ccf38759e934" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+[
+{
+	'accountsId':&quot;0012x000003satJAAQ&quot;,
+	'email':'a@a.com'
+},
+{
+	'accountsId':&quot;2&quot;,
+	'email':'b@b.com'
+},
+{
+	'accountsId':&quot;3&quot;,
+	'email':'c@c.com'
+},
+{
+	'accountsId':&quot;4&quot;,
+	'email':'d@d.com'
+}
+]
+
+
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			
+</munit-tools:mock-when>
+			
+			<munit-tools:mock-when doc:name="Mock when bulk insert" doc:id="46f76003-dd01-4908-8baf-eb918415e6a7" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when bulk update" doc:id="7200cd86-7fa9-4c38-9bb8-cfcaf3d1a0ca" processor="db:bulk-update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="a0cb9815-a727-4097-99f1-9b2f7e0532b9" name="goto_contacts_processing"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="b55ac32a-d4f7-46a6-9230-0c600217c9b8" actual="#[payload]" expected="#[1]" message="test no update successful"/>
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="test-goto-contact-processing-4" doc:id="78d940b7-f141-4344-937b-df48c58d0d7d" >
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	{
+		fname : 'test5',
+		lname : 'test5',
+		accountId : '4',
+		email : 'd@d.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	}
+]]" doc:name="validContacts" doc:id="fe1e468f-c90c-4bec-ba39-cc49eb5a8d3d" variableName="validContacts"/>
+			
+			<munit-tools:mock-when doc:name="Mock when select email, accountId from account" doc:id="82bb752b-61ed-4214-a921-b7cc3296749f" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select email and accountId from Contact" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="46fbb41a-8897-46fb-9af2-ccf38759e934" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+[
+{
+	'accountsId':&quot;0012x000003satJAAQ&quot;,
+	'email':'a@a.com'
+},
+{
+	'accountsId':&quot;2&quot;,
+	'email':'b@b.com'
+},
+{
+	'accountsId':&quot;3&quot;,
+	'email':'c@c.com'
+},
+{
+	'accountsId':&quot;4&quot;,
+	'email':'d@d.com'
+}
+]
+
+
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			
+</munit-tools:mock-when>
+			
+			<munit-tools:mock-when doc:name="Mock when bulk insert" doc:id="eaf3ebf0-2bfd-4fb1-b9d4-ab8c90bf495d" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when bulk update" doc:id="c3e9e51b-4c7f-45e9-8112-24e1591adcc9" processor="db:bulk-update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		
+</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="cd8a405a-0916-4d54-b29e-1f2957b01607" name="goto_contacts_processing"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:verify-call doc:name="Verify call" doc:id="787c118f-765e-44af-be31-96183e6c100f" processor="logger" times="#[1]">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="INFO" attributeName="level" />
+					<munit-tools:with-attribute whereValue="Logger" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="e411f082-c8dc-4974-b22d-6b71cdbc49e0" attributeName="doc:id" />
+					<munit-tools:with-attribute whereValue="No record found with same email Id but different account Id" attributeName="message" />
+				</munit-tools:with-attributes>
+			</munit-tools:verify-call>
+		
+</munit:validation>
+	</munit:test>
+	<munit:test name="test-main" doc:id="9fd770d7-6f72-4e6b-9199-8b5aa823ae41" >
+		<munit:behavior >
+			<munit-tools:mock-when doc:name="Mock when S3get object" doc:id="539614d7-7d24-45a3-80c6-be025bf8b11e" processor="s3:get-object">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Read the CSV" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="b37e9285-e7ff-45ab-9e51-f5912ddd0c0c" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/mockCSV.dwl')]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			
+			<munit-tools:mock-when doc:name="Mock when select accountId" doc:id="f4c5fc39-34ca-4578-8fd6-2aedc9f6a43b" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select accountIds from account" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="397cf0f6-6a8b-47f7-8b29-af865ee651d2" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+[
+{
+	'AccountId':&quot;0012x000003satJAAQ&quot;
+},
+{
+	'AccountId':&quot;0012x000003satHAAQ&quot;
+},
+{
+	'AccountId':&quot;2&quot;
+},
+{
+	'AccountId':&quot;3&quot;
+},
+{
+	'AccountId':&quot;4&quot;
+}
+]
+
+
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			
+			<munit-tools:mock-when doc:name="Mock when bulk insert" doc:id="174d0582-a5c5-47ea-a3fc-248b0414f379" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			
+			<munit-tools:mock-when doc:name="Mock when select email, accountId from account" doc:id="ffba262c-af54-4a24-8872-36b0ecbabc3e" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select email and accountId from Contact" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="46fbb41a-8897-46fb-9af2-ccf38759e934" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+[
+{
+	'accountsId':&quot;0012x000003satJAAQ&quot;,
+	'email':'a@a.com'
+},
+{
+	'accountsId':&quot;2&quot;,
+	'email':'b@b.com'
+},
+{
+	'accountsId':&quot;3&quot;,
+	'email':'c@c.com'
+},
+{
+	'accountsId':&quot;4&quot;,
+	'email':'d@d.com'
+}
+]
+
+
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			
+</munit-tools:mock-when>
+			
+			
+			<munit-tools:mock-when doc:name="Mock when bulk update" doc:id="344b9d37-89d7-484b-bb7d-0b30093cb3de" processor="db:bulk-update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when S3 create object" doc:id="f09d1314-f3f2-49c6-929a-128902fddf7a" processor="s3:create-object">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Create object" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="3b1b1a8e-3aa8-4985-a19c-f437b60bc04f" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when S3 delete object" doc:id="b809cb43-8cfa-4533-98de-4de8688d85cc" processor="s3:delete-object">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Delete object" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="5b9c5ea1-9e17-40ab-a654-c7240fd032c9" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="54010a9f-b361-4ee7-a997-c21825a18239" name="main"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:verify-call doc:name="Verify call" doc:id="cd3a375a-5883-4b9c-a1bf-d64c76cc147e" processor="logger" times="#[1]">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Logger" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="a6db57e4-01a2-4d79-8e7a-4380fc8bacdd" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+			</munit-tools:verify-call>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-scheduler" doc:id="e82c990a-cf68-4745-aa82-782d39554117" >
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock when select joblock" doc:id="4383376e-d391-42ed-bc93-44dfbc1892dd" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="ccddbd64-ef38-421e-a8e3-0a71731ab1f7" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[
+	[
+		{
+		 'JobLock':'0',
+		'FromDate':'2020-07-19 06:00:00'
+}
+]
+]" mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when request joblock" doc:id="e92a807a-562d-44c2-be1f-f2cf4dc436cc" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="fetch jobLock and startTime" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="401ede7f-db06-4abe-a8d1-fb230a99380d" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/requestJobLockDataMock.dwl')]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when update" doc:id="31a99dca-ba58-43a2-bd3d-9258de133a3e" processor="db:update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when request" doc:id="11ef8dcb-d336-43c6-96e1-81a14826e2e2" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Request" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="bfd481d6-6782-4aa4-b556-bb20a869c9aa" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		
+</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="64def37e-9dcb-4403-8cdd-45308b73449c" name="scheduler_30_minutes"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:verify-call doc:name="Verify call" doc:id="e7a2b831-7f82-4778-ae35-ffd2fff66d76" processor="logger" times="1">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Logger" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="d6b25bc7-87e4-426a-a816-67f1f1e7d6ea" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+			</munit-tools:verify-call>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-validateContactsForDB-1" doc:id="6bb15792-eb60-4931-84f7-26a5338b3f81" >
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	
+	{
+		'firstName' : &quot;Test1&quot;,
+		'lastName' : &quot;Test1&quot;,
+		'accountId' : &quot;1&quot;,
+		'email' : &quot;a@a.com&quot;,
+		'phone' : &quot;9999999999&quot;,
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test2',
+		'lastName' : 'Test2',
+		'accountId' : '2',
+		'email' : 'b@b.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test3',
+		'lastName' : 'Test3',
+		'accountId' : '3',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	}
+]]" doc:name="dbContactsData" doc:id="54129f0a-8379-440b-96d9-686248cb09c5" variableName="dbContactsData"/>
+			<munit-tools:mock-when doc:name="Mock when SF query" doc:id="5f3f6d05-0fa2-4e8a-8910-7fbc13378ade" processor="salesforce:query">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Query" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="c49326d0-4f71-4a29-a7d9-7069043898d0" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/idFromSFaccount.dwl')]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when bulk insert" doc:id="ed1f2dbc-ee80-4c95-a6f8-1266fa678e8b" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="81280902-42a7-4219-abea-0f1bf58c4f0a" name="validateContactsForDB"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:verify-call doc:name="Verify call" doc:id="0d387760-d482-4a9d-ad7e-cf2beece522e" processor="logger" times="1">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Logger" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="209a9797-c81c-4c84-8edc-f225eff5cb61" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+			</munit-tools:verify-call>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-validateContactsForDB-2" doc:id="bfca3223-fba5-4986-9a92-2e1e950c2dd0" >
+		
+		<munit:behavior>
+			<set-variable value="#[output application/json
+---
+[
+	
+	{
+		'firstName' : &quot;Test1&quot;,
+		'lastName' : &quot;Test1&quot;,
+		'accountId' : &quot;1&quot;,
+		'email' : &quot;a@a.com&quot;,
+		'phone' : &quot;9999999999&quot;,
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test2',
+		'lastName' : 'Test2',
+		'accountId' : '2',
+		'email' : 'b@b.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test3',
+		'lastName' : 'Test3',
+		'accountId' : '3',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	}
+]]" doc:name="dbContactsData" doc:id="a4425f4b-55b8-41b6-8048-c697d3d8f1fe" variableName="dbContactsData"/>
+			
+		<munit-tools:mock-when doc:name="Mock when SF query" doc:id="3c187d1b-74e1-438d-a5cb-1d4b01f1c7ba" processor="salesforce:query">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Query" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="c49326d0-4f71-4a29-a7d9-7069043898d0" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/blankIdFromSFaccount.dwl')]" />
+				</munit-tools:then-return>
+			
+</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when bulk insert" doc:id="cf92f90d-9006-4421-9a58-7da256ea9b0a" processor="db:bulk-insert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>	
+		
+</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="e2b2f43b-95f0-49dc-a27c-00eee7078bd2" name="validateContactsForDB"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-equals doc:name="Assert equals" doc:id="09915a81-ea9f-489e-aaf2-b447b74defad" actual="#[payload]" expected="#[1]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-processContacts-1" doc:id="68a90af1-25b5-43eb-929b-f58d7d36d636" >
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	{
+		'firstName' : &quot;Test1&quot;,
+		'lastName' : &quot;Test1&quot;,
+		'accountId' : &quot;1&quot;,
+		'email' : &quot;a@a.com&quot;,
+		'phone' : &quot;9999999999&quot;,
+		'Id' : '1'
+	},
+	{
+		'firstName' : 'Test2',
+		'lastName' : 'Test2',
+		'accountId' : '2',
+		'email' : 'b@b.com',
+		'phone' : '9999999999',
+		'Id' : '2'
+	},
+	{
+		'firstName' : 'Test3',
+		'lastName' : 'Test3',
+		'accountId' : '3',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : '3'
+	},
+	{
+		'firstName' : 'TestInvalid',
+		'lastName' : 'TestInvalid',
+		'accountId' : '10',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	}
+]]" doc:name="validContacts" doc:id="0d22cda6-5a6d-480a-b09c-748d634e7596" variableName="validContacts"/>
+			<munit-tools:mock-when doc:name="Mock when SF query" doc:id="68b39e50-d29d-449e-bd6e-0a26b738b6cb" processor="salesforce:query">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Salesforce_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/idFromSFaccount.dwl')]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when SF upsert" doc:id="87998b72-94a2-448e-b0e1-c05feaf66654" processor="salesforce:upsert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Salesforce_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="cc43d3cf-4f40-46ce-bf2b-e176024d0825" name="processContacts"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="cd70d502-81f1-4e86-bc25-a354b583ef8a" message="test processContacts with insert and update failed" expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="test-processContacts-2" doc:id="cec2eccb-4a41-42ce-a802-11885c0f9db0" >
+		<munit:behavior >
+			<set-variable value="#[output application/json
+---
+[
+	{
+		'firstName' : &quot;Test1&quot;,
+		'lastName' : &quot;Test1&quot;,
+		'accountId' : &quot;1&quot;,
+		'email' : &quot;a@a.com&quot;,
+		'phone' : &quot;9999999999&quot;,
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test2',
+		'lastName' : 'Test2',
+		'accountId' : '2',
+		'email' : 'b@b.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test3',
+		'lastName' : 'Test3',
+		'accountId' : '3',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	},
+	{
+		'firstName' : 'TestInvalid',
+		'lastName' : 'TestInvalid',
+		'accountId' : '10',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	}
+]]" doc:name="validContactsWithZeroUpdate" doc:id="6b49a7fe-cd4a-445e-a4c4-2be36f6a163d" variableName="validContacts"/>
+			<munit-tools:mock-when doc:name="Mock when SF query" doc:id="0c0d5e7c-2981-46ab-9ac2-27b9f1265314" processor="salesforce:query">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Salesforce_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/idFromSFaccount.dwl')]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when SF upsert" doc:id="ead4e1f1-5e8d-4567-8340-2293cbf41ed0" processor="salesforce:upsert">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Salesforce_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+			</munit-tools:mock-when>
+		
+</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="ac5bdc10-9217-491a-a725-298f2f28142d" name="processContacts"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="0ffc88b7-d2f7-41d1-9dac-d536ade5e13f" message="test process contacts with insert and no update failed" expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	
+</munit:test>
+	<munit:test name="test-DBtoSF-main-flow-1" doc:id="610cf3a4-f06d-4854-9d15-eb3c82b6780f" >
+		<munit:behavior >
+			<set-payload value="#[{}]" doc:name="Set Payload" doc:id="fd07736f-b401-4488-b0eb-d828ee3be13a" />
+			<munit-tools:mock-when doc:name="Mock when stored procedure" doc:id="49ef3509-e413-4787-977e-d76a2e0476fb" processor="db:stored-procedure">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Stored procedure" attributeName="doc:name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when select contact data" doc:id="cfcce3f3-e599-49fe-b550-0da6a219e5b1" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Select data from contacts for syncing" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/dbContactsData.dwl')]" mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when calling validation" doc:id="ef5a2ddd-70b5-4e01-abfd-62ba28921a87" processor="flow-ref">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="validateContactsForDB" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="e990d0ff-b49f-4939-b8ee-9949515b37b8" attributeName="doc:id" />
+					<munit-tools:with-attribute whereValue="validateContactsForDB" attributeName="name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<set-variable value="#[output application/json
+---
+[
+	{
+		'firstName' : &quot;Test1&quot;,
+		'lastName' : &quot;Test1&quot;,
+		'accountId' : &quot;1&quot;,
+		'email' : &quot;a@a.com&quot;,
+		'phone' : &quot;9999999999&quot;,
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test2',
+		'lastName' : 'Test2',
+		'accountId' : '2',
+		'email' : 'b@b.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test3',
+		'lastName' : 'Test3',
+		'accountId' : '3',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	},
+	{
+		'firstName' : 'TestInvalid',
+		'lastName' : 'TestInvalid',
+		'accountId' : '10',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	}
+]]" doc:name="Set Variable valid contacts" doc:id="4f77c2b8-7257-4538-87d5-7cef5d2cc27e" variableName="validContacts"/>
+			<munit-tools:mock-when doc:name="Mock when calling process contacts" doc:id="7e445921-4b4b-47a6-8a13-120d8c7c0dc6" processor="flow-ref">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="processContacts" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="1797229d-d146-41bf-b440-d22496564156" attributeName="doc:id" />
+					<munit-tools:with-attribute whereValue="processContacts" attributeName="name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<set-variable value="1" doc:name="Set Variable updatedMetadataResult" doc:id="946750e5-fab3-47f2-8e71-d60f896a7f62" variableName="updatedMetadataResult"/>
+			<munit-tools:mock-when doc:name="Mock when bulk update" doc:id="fba1bf06-a225-4466-8e68-04ba17b7c29f" processor="db:bulk-update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="c23a5798-03f8-4c42-b42a-f2ab7ac7e7f1" name="db-to-SFFlow"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="c82a73fd-cec0-438b-bb45-15a1e6fecb66" message="mail flow failed" expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="test-DBtoSF-main-flow-2" doc:id="1c34a1cc-db57-422a-a768-8a0d3e0a0692" >
+		<munit:behavior >
+			<set-payload value="#[{
+	'FromDate':now(),
+	'listOfIds' :&quot;1,2&quot;
+	
+}]" doc:name="FromDate" doc:id="6c77b2a8-9091-4c19-be21-5d9373861c9e" />
+		<munit-tools:mock-when doc:name="Mock when stored procedure" doc:id="fade3871-2eba-4faa-b86f-0a0f6b2bdedc" processor="db:stored-procedure">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when select contact data" doc:id="5767e5f7-c6df-47b6-bc58-71bd8a15db69" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/dbContactsData.dwl')]" mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when calling validation" doc:id="28ffd24b-2b81-43c1-a7d5-88ec6c6fdcd9" processor="flow-ref">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="validateContactsForDB" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="e990d0ff-b49f-4939-b8ee-9949515b37b8" attributeName="doc:id" />
+					<munit-tools:with-attribute whereValue="validateContactsForDB" attributeName="name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<set-variable value="#[output application/json
+---
+[
+	{
+		'firstName' : &quot;Test1&quot;,
+		'lastName' : &quot;Test1&quot;,
+		'accountId' : &quot;1&quot;,
+		'email' : &quot;a@a.com&quot;,
+		'phone' : &quot;9999999999&quot;,
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test2',
+		'lastName' : 'Test2',
+		'accountId' : '2',
+		'email' : 'b@b.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	},
+	{
+		'firstName' : 'Test3',
+		'lastName' : 'Test3',
+		'accountId' : '3',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	},
+	{
+		'firstName' : 'TestInvalid',
+		'lastName' : 'TestInvalid',
+		'accountId' : '10',
+		'email' : 'c@c.com',
+		'phone' : '9999999999',
+		'Id' : ''
+	}
+]]" doc:name="Set Variable valid contacts" doc:id="b69961f3-9bb4-4f31-89bb-9e4eab0aebf9" variableName="validContacts"/>
+			<munit-tools:mock-when doc:name="Mock when calling process contacts" doc:id="f4c87f03-f518-4e09-b08e-87636e0f4522" processor="flow-ref">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="processContacts" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="1797229d-d146-41bf-b440-d22496564156" attributeName="doc:id" />
+					<munit-tools:with-attribute whereValue="processContacts" attributeName="name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<set-variable value="#[[1,1,1]]" doc:name="Set Variable updatedMetadataResult" doc:id="61c2e6c6-0f36-4c5c-985c-1bf4c1e20c3f" variableName="updatedMetadataResult"/>
+			<munit-tools:mock-when doc:name="Mock when bulk update" doc:id="ee34b70e-60d3-4022-992f-5c1d7d8dfb80" processor="db:bulk-update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="e22504b1-2127-4814-abc0-72013c7c803f" name="db-to-SFFlow"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="59a4ab03-a656-4ce4-a348-dcec1d58195f" message="main flow failed" expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="test-DBtoSF-scheduler" doc:id="fb9717f8-a389-45fd-907d-a6e004db93f9" >
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock when request joblock" doc:id="749b406c-d419-411b-a345-90db4a9ac462" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Request" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="eb3c2862-14bb-46d8-b0f3-b069825c1244" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[readUrl('classpath://sample_data/requestJobLockDataMock.dwl')]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when update" doc:id="87dbb260-c467-4ba3-aa53-ceec081a5f53" processor="db:update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="${db.config}" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock when request" doc:id="4222e9ac-d7ff-4a51-b8a4-889e7c4adf6a" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Request" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="184b8b34-e0d5-43a8-acec-d451dcd01814" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#['1']" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		
+</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="68fde7f2-f95a-4c1e-9634-913e3743c2c9" name="db-to-SFFlow1"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:verify-call doc:name="Verify call" doc:id="5e14e057-a293-43a8-b14b-f2f257af8e22" processor="logger" times="1">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Logger" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="efdc0ba0-8e63-45af-a99f-38c4c1bfa965" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+
+			</munit-tools:verify-call>
+		</munit:validation>
+	</munit:test>
+
+</mule>

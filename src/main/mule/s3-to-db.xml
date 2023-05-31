@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:s3="http://www.mulesoft.org/schema/mule/s3" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/s3 http://www.mulesoft.org/schema/mule/s3/current/mule-s3.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	
+	
+	<flow name="main" doc:id="b9be03f3-8054-44bb-840a-f5d5d1c5e492" >
+		<http:listener doc:name="Listener" doc:id="db7485eb-8101-4bf2-9416-f05aa3896f77" config-ref="HTTP_Listener_config" path="/readS3" allowedMethods="POST"/>
+		<s3:get-object doc:name="Read the CSV" doc:id="b37e9285-e7ff-45ab-9e51-f5912ddd0c0c" config-ref="Amazon_S3_Configuration" bucketName="contacts-iles" key="New/Contact.csv"/>
+		<set-variable value="#[payload]" doc:name="fileFromS3" doc:id="2d4238a0-bed5-4203-b046-746e61bac2e1" variableName="fileFromS3"/>
+		
+		<validation:all doc:name="All" doc:id="46ab5910-9c0d-48ce-81bc-fe76ef028807">
+			<validation:is-not-null doc:name="Is not null" doc:id="c4908767-9e1c-4f92-8d6a-328ea0ef156e" value="#[payload]" />
+			<validation:is-not-empty-collection doc:name="Is not empty collection" doc:id="02234e65-4948-43d8-bffa-14eed227cba1" />
+		</validation:all>
+		<ee:transform doc:name="Transform Message" doc:id="0596446b-e1b2-47a0-8fc1-bb3a973276a6">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map ((value,index) -> {
+	fname : value.FirstName as String default '',
+	lname : value.LastName as String default '',
+	accountId : value.AccountId as String default '',
+	email : value.Email as String default '',
+	phoneNumber : value.Phone as String default '',
+	lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'},
+	street: value.Street as String default '',
+	city : value.City as String default '',
+	country : value.Country as String default '',
+	pin : value.Pin as String default '' 
+	} 
+)]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="test" ><![CDATA[%dw 2.0
+var first = {
+  "insertContacts": [
+    
+  ],
+  "updateContacts": [
+    
+    {
+      "fname": "Avi",
+      "lname": "Green",
+      "accountId": "0012x000003satEAAQ",
+      "email": "agreen@uog.com",
+      "phoneNumber": "(212) 842-5500",
+      "lastModifiedByDate": "2020-07-15 10:47:11"
+    },
+    {
+      "fname": "",
+      "lname": "Test Contact 1",
+      "accountId": "0012x000004LQzoAAG",
+      "email": "",
+      "phoneNumber": "",
+      "lastModifiedByDate": "2020-07-15 10:47:11"
+    },
+    {
+    	"email":"a@a.com",
+    	"accountId":"1"
+    }
+  ]
+}
+var second = [
+  {
+    "email": "agreen@uog.com",
+    "accountsId": "0012x000003satEAAQ"
+  },
+  {
+    "email": "a@a.com",
+    "accountsId": "0012x000003satKAAQ"
+  }
+]
+output application/json
+---
+(second map ((element) -> {
+	(first.updateContacts filter (sizeOf($.email) >0 and sizeOf(element.email)>0 and $.email == element.email and $.accountsId != element.accountId) )
+})) filter (sizeOf($) != 0)
+
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="contactsFromS3" doc:id="c78d9241-cb2f-4e4a-b493-ae205e06182f" variableName="contactsFromS3"/>
+		<set-variable value="S3toDB" doc:name="objectName" doc:id="e31034d7-faa4-4d3b-ac95-8e7b6ccb7f5c" variableName="objectName"/>
+		<flow-ref doc:name="validateContactsForS3" doc:id="9286f15a-d65f-4d5f-a48d-2fe3c8aca766" name="validateContactsForS3" />
+		<choice doc:name="Choice" doc:id="4cd481d3-077d-4478-84c0-3cd1fe6ca6f4" >
+			<when expression="#[vars.validContacts != null]">
+				<flow-ref doc:name="goto_contacts_processing" doc:id="d9b848c6-3376-4557-8ac0-d419751b6f2c" name="goto_contacts_processing"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="59612535-9fb6-4523-ac73-f2396185ff3c" message="No valid Contacts found to insert/update in Contact"/>
+			</otherwise>
+		</choice>
+		<s3:create-object doc:name="Create object" doc:id="3b1b1a8e-3aa8-4985-a19c-f437b60bc04f" config-ref="Amazon_S3_Configuration" bucketName="contacts-iles" key="#[&quot;Old(read)/Contacts&quot;++ (now() as String {'format':'yyyy-MM-dd HH:mm:ss'}) ++&quot;.csv&quot;]">
+			<s3:object-content ><![CDATA[#[vars.fileFromS3]]]></s3:object-content>
+		</s3:create-object>
+		<s3:delete-object doc:name="Delete object" doc:id="5b9c5ea1-9e17-40ab-a654-c7240fd032c9" config-ref="Amazon_S3_Configuration" bucketName="contacts-iles" key="New/Contact.csv"/>
+		<set-payload value="#['data saved in database successfully']" doc:name="Set Payload" doc:id="30a32e92-ab5c-4c16-b650-364e5ed0b5ca" />
+		<logger level="INFO" doc:name="Logger" doc:id="a6db57e4-01a2-4d79-8e7a-4380fc8bacdd" message="#[payload]" />
+	</flow>
+	<sub-flow name="validateContactsForS3" doc:id="d83137ec-dd01-4976-ad25-06117642e2f8" >
+		<db:select doc:name="Select accountIds from account" doc:id="397cf0f6-6a8b-47f7-8b29-af865ee651d2" config-ref="${db.config}">
+			<db:sql>select AccountId from schema1.account</db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="f63815fd-db8e-4219-b65c-092a3cc5e91b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map {
+	accountsId: $.AccountId default ''
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="be69d581-ef65-4feb-8e4a-62e192d9672c" >
+			<when expression="#[(sizeOf(payload) != 0)]">
+				<ee:transform doc:name="Transform Message" doc:id="3cfcf79c-ebc7-49c3-99ac-d9557e7fe0c8" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="InvalidContacts" ><![CDATA[%dw 2.0
+var a = [
+	{'email':"a@a.com",'accountId':"1"},
+	{'email':"b@b.com",'accountId':"2"},
+	{'email':"",'accountId':"3"}
+]
+var b = [
+	{'accountId':"1"},
+	{'accountId':"3"}
+]
+output application/json
+---
+(vars.contactsFromS3 filter ((value,index) -> (! (payload.accountsId contains (value.accountId))  or sizeOf(value.email) ==0))) filter (sizeOf($) != 0)
+//(a filter ((value,index) -> (! (b.accountId contains (value.accountId))) or sizeOf(value.email) ==0)) filter (sizeOf($) != 0)]]></ee:set-variable>
+						<ee:set-variable variableName="validContacts" ><![CDATA[%dw 2.0
+output application/json
+---
+(vars.contactsFromS3 filter ((value,index) -> ((payload.accountsId contains (value.accountId)) and sizeOf(value.email) != 0))) filter (sizeOf($) != 0)]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<set-variable value="#[vars.contactsFromS3]" doc:name="InvalidContacts" doc:id="05ba5571-828d-4c23-b218-a06162ca0dab" variableName="InvalidContacts"/>
+				<flow-ref doc:name="insertInAuditForS3" doc:id="560a061b-8b7b-4acc-a276-6aa10d708d89" name="insertInAuditForS3"/>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="88f64af4-2ec3-4350-8644-a7aafd0f16cb" >
+			<when expression="#[vars.InvalidContacts != null]">
+				<flow-ref doc:name="insertInAuditForS3" doc:id="2909ce5a-a0bb-4155-90dc-0b93bc139a28" name="insertInAuditForS3"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="5eaa13d6-2297-4f75-ad9f-3fc8b8e65905" message="No record found to insert in audit"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="insertInAuditForS3" doc:id="6d6bb3e2-e549-4f97-a778-b31c022fa740" >
+		<ee:transform doc:name="Transform Message" doc:id="8dfe4c1f-8935-4815-8bbe-8ce3700f68e8" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.InvalidContacts map {
+	sourceIdString : $.email default ''++'-'++ $.accountId default '',
+	objectName : vars.objectName,
+	errorMsg : 'Account does not exist',
+	DateCreated : now() as String {'format':'yyyy-MM-dd HH:mm:ss'},
+	DateLastUpdated : now() as String {'format':'yyyy-MM-dd HH:mm:ss'},
+	CreatedBy : 'ETL_User',
+	UpdatedBy : 'ETL_User'
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+		<db:bulk-insert doc:name="Bulk insert" doc:id="334186f0-6366-4d55-b4a2-ca37b20349b3" config-ref="Database_Config">
+			<db:sql >insert into schema1.contacts_audit
+(sourceIdStr,objectName,errorMsg,DateCreated,DateLastUpdated,CreatedBy,UpdatedBy)
+Values
+(
+:sourceIdString,
+:objectName,
+:errorMsg,
+:DateCreated,
+:DateLastUpdated,
+:CreatedBy,
+:UpdatedBy
+)</db:sql>
+		</db:bulk-insert>
+	</sub-flow>
+	<sub-flow name="goto_contacts_processing" doc:id="0d4f794f-bb64-431c-a951-6edc4c22b25c" >
+		<db:select doc:name="Select email and accountId from Contact" doc:id="46fbb41a-8897-46fb-9af2-ccf38759e934" config-ref="${db.config}">
+			<db:sql >Select email, accountsId from schema1.contacts
+where inactive = 1</db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="ce6b445a-bba3-4b30-a2eb-d3cf04489e68" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="dbContactEmails" ><![CDATA[%dw 2.0
+output application/json
+---
+payload map {
+	email : $.email default '',
+	accountsId: $.accountsId default ''
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="c5c2766b-eb47-41ae-bfa7-ee2a029c3f84" >
+			<when expression="#[vars.dbContactEmails != null and sizeOf(vars.dbContactEmails) &gt; 0]">
+				<ee:transform doc:name="Transform Message" doc:id="b8a0f7f5-468a-4a0a-bbec-cfd45154bee7">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{}
+]]></ee:set-payload>
+			</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="processedContacts" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+insertContacts : (vars.validContacts filter !(vars.dbContactEmails.email contains ($.email))) filter (sizeOf($) != 0),
+updateContacts : (vars.validContacts filter (vars.dbContactEmails.email contains ($.email))) filter (sizeOf($) != 0)
+}]]></ee:set-variable>
+					</ee:variables>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<set-payload value="#[vars.validContacts]" doc:name="Set Payload" doc:id="451ab0d4-c98d-45f9-9b4c-90f859563662" />
+				<flow-ref doc:name="insert_in_contact" doc:id="5a8edb18-b109-49c3-b610-85575e76eacf" name="insert_in_contact" />
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="91187f13-086f-4e50-aefc-741bbfbf7cd6" >
+			<when expression="#[(vars.processedContacts.insertContacts != null) and sizeOf(vars.processedContacts.insertContacts) != 0]">
+				<set-payload value="#[vars.processedContacts.insertContacts]" doc:name="Set Payload" doc:id="eafaa2ed-95a6-4f1d-a020-4e5b86e08e18" />
+				<flow-ref doc:name="insert_in_contact" doc:id="c935a635-9523-44d4-8f4c-8ddc52cd0170" name="insert_in_contact" />
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="4f79c14d-acc9-475f-b21f-28ac66aa7e7b" message="No More record to insert"/>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="e49df6ed-490b-4aad-b281-7f825bee1d8f" >
+			<when expression="#[vars.processedContacts.updateContacts != null and sizeOf(vars.processedContacts.updateContacts) != 0]">
+				<db:bulk-update doc:name="update contacts with same emailId and accountId" doc:id="f8cb6811-305f-4df1-b40e-f883877af918" config-ref="Database_Config">
+					<db:bulk-input-parameters ><![CDATA[#[vars.processedContacts.updateContacts]]]></db:bulk-input-parameters>
+					<db:sql >Update schema1.contacts
+set
+fname = :fname , lname = :lname , phoneNumber = :phoneNumber, lastModifiedByDate = :lastModifiedByDate 
+where email = :email and accountsId = :accountId and inactive = 1</db:sql>
+				</db:bulk-update>
+				<db:bulk-update doc:name="update contact address" doc:id="4d9c24e3-5ceb-485a-8343-3326d7389fd8" config-ref="Database_Config">
+					<db:bulk-input-parameters ><![CDATA[#[vars.processedContacts.updateContacts]]]></db:bulk-input-parameters>
+					<db:sql>update schema1.contact_Address
+set street= :street, city= :city, country =:country, pin=:pin where email= :email</db:sql>
+				</db:bulk-update>
+				<ee:transform doc:name="Transform Message" doc:id="ef960a35-059e-471a-8305-e2a98e0b6384" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+
+output application/json
+---
+(vars.dbContactEmails map ((element) -> {
+	(vars.processedContacts.updateContacts filter (sizeOf($.email) >0 and sizeOf(element.email) >0 and $.email == element.email and $.accountId != element.accountsId) )
+})) filter (sizeOf($) != 0)]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="test" ><![CDATA[%dw 2.0
+
+var dbContactEmails = [
+{
+	'accountsId':"0012x000003satJAAQ",
+	'email':'a@a.com'
+},
+{
+	'accountsId':"2",
+	'email':'b@b.com'
+},
+{
+	'accountsId':"3",
+	'email':'c@c.com'
+},
+{
+	'accountsId':"4",
+	'email':'d@d.com'
+}
+]
+var updateContacts =[
+	{
+		fname : 'test5',
+		lname : 'test5',
+		accountId : '4',
+		email : 'd@d.com',
+		phoneNumber : '9999999999',
+		lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}
+	}
+]
+output application/json
+---
+(dbContactEmails map ((element) -> {
+	(updateContacts filter (sizeOf($.email) >0 and sizeOf(element.email) >0 and $.email == element.email and $.accountId != element.accountsId) )
+})) filter (sizeOf($) != 0)]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<choice doc:name="Choice" doc:id="d1401c2b-c67e-4745-ba52-1eb5187045fd" >
+					<when expression="#[payload != null and sizeOf(payload) != 0]">
+						<db:bulk-update doc:name="update inactive=0 for contacts with same emailId and different accountId" doc:id="e94598fa-11fe-4dfd-84d7-1f9b2a8c3783" config-ref="Database_Config" target="updateResult">
+					<db:sql>Update schema1.contacts
+set inactive = 0
+where email = :email  and inactive = 1 </db:sql>
+				</db:bulk-update>
+						<flow-ref doc:name="insert_in_contact" doc:id="3ddb22ac-3004-42b8-a5a2-4e7c6f4b3165" name="insert_in_contact"/>
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger" doc:id="e411f082-c8dc-4974-b22d-6b71cdbc49e0" message="No record found with same email Id but different account Id"/>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="f0ecc257-624b-4457-8d47-2959dd51c49b" message="No record found to update with same Email Id"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	
+	<sub-flow name="insert_in_contact" doc:id="d7db4339-3e40-48f0-a87e-f78d911afa62" >
+		<choice doc:name="Choice" doc:id="95e57a1f-9239-42cc-9354-a2de7db7720f">
+			<when expression="#[payload != null]">
+				<db:bulk-insert doc:name="insert new contacts" doc:id="105ecdf4-eba5-4b64-9aa0-9b08d0a481e0" config-ref="Database_Config" target="insertResult">
+					<db:sql>Insert into schema1.contacts
+(fname,lname,accountsId,email,phoneNumber,inactive,createdBy,lastModifiedByDate)
+Values
+(
+:fname,
+:lname,
+:accountId,
+:email,
+:phoneNumber,
+1,
+&quot;ETL_User&quot;,
+:lastModifiedByDate 
+)</db:sql>
+				</db:bulk-insert>
+				<db:bulk-insert doc:name="insert new contact address" doc:id="80cdf878-3e23-4765-af6a-1dd6ac9ba774" config-ref="Database_Config">
+					<db:sql >insert into schema1.contact_address (street,city,country,pin,email)
+values
+(:street,
+:city,
+:country,
+:pin,
+:email
+)</db:sql>
+				</db:bulk-insert>
+			
+</when>
+			<otherwise>
+				<set-payload value='#["No new contact found to insert"]' doc:name="Set Payload" doc:id="f302b28e-17db-4c02-ab60-699f750407e2" />
+				<logger level="INFO" doc:name="Logger" doc:id="a6c9c320-8ac5-4a46-9847-230faaaab9fb" message="No new contact found to insert" />
+			
+</otherwise>
+		</choice>
+	</sub-flow>
+	<flow name="scheduler_30_minutes" doc:id="33b3b7a3-96af-4b74-b5e5-d56b55c029b8">
+		<scheduler doc:name="Scheduler" doc:id="3431e80e-cfc6-4260-a122-2eee96e28d8e" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="30" timeUnit="MINUTES" startDelay="5"/>
+			</scheduling-strategy>
+		</scheduler>
+		<http:request method="GET" doc:name="fetch jobLock and startTime" doc:id="401ede7f-db06-4abe-a8d1-fb230a99380d" config-ref="HTTP_Request_configuration" path="/getJobLock/{objectName}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"objectName" : "S3toDB"
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="218dcb94-d1a1-40fa-8131-d4526edaefcb" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="b139fb87-45fb-4a3d-abed-54463fa21fa3" >
+			<when expression="#[payload != null and payload.JobLock == 0]">
+				<set-variable value="#[payload.startTime as String {format:'yyyy-MM-dd HH-mm-ss'}]" doc:name="startTime" doc:id="7c4b0ce4-4c9c-41c3-a1c6-38a021cda397" variableName="startTime"/>
+				<db:update doc:name="Update JobLock to 1" doc:id="56ff7bc0-7ba7-45b2-bb5c-0b38f088672a" config-ref="Database_Config">
+					<db:sql >update schema1.control
+set JobLock=1 where objectName = 'S3toDB'</db:sql>
+				</db:update>
+				<http:request method="POST" doc:name="Request" doc:id="bfd481d6-6782-4aa4-b556-bb20a869c9aa" config-ref="HTTP_Request_configuration" path="/readS3" />
+				<db:update doc:name="Update jobLock to 0" doc:id="f0bc8487-e5ed-4c2f-918e-9d52a299c63f" config-ref="Database_Config">
+					<db:sql>update schema1.control
+set
+JobLock = 0 , FromDate = :startTime , ToDate = :endTime
+where objectName = 'S3toDB'</db:sql>
+					<db:input-parameters><![CDATA[#[{'startTime':vars.startTime,'endTime':now() as String {'format':'yyyy-MM-dd HH-mm-ss'}}]]]></db:input-parameters>
+				</db:update>
+				<logger level="INFO" doc:name="Logger" doc:id="d6b25bc7-87e4-426a-a816-67f1f1e7d6ea" message="#[output application/json --- {message : 'S3toDB job completed 
+successfully : finished at ' ,
+endTime : now() as String {'format':'yyyy-MM-dd HH:mm:ss'} }]" />
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="05523990-70a1-4594-9cf0-04bb4ed10df9" message='Another job for "S3toDB" is in running state hence skipping this'/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="34bc9879-a14b-413e-bdac-ca5a19bc2147" type="ANY">
+				<db:update doc:name="Update" doc:id="ab45aed7-a395-4e51-9287-ad052bdec092" config-ref="Database_Config">
+					<db:sql >update schema1.control
+set
+JobLock = 0 where objectName = 'S3toDB'</db:sql>
+				</db:update>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>

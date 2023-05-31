@@ -1,0 +1,19 @@
+{
+  "sampleData": {
+    "77c81f7f-4924-4c1e-8994-849b11f3e22b": {
+      "payload": "sample_data/list_object_2.dwl",
+      "vars-contactsFromS3": "sample_data/list_json.json"
+    },
+    "8dfe4c1f-8935-4815-8bbe-8ce3700f68e8": {
+      "payload": "sample_data/unknown.dwl"
+    },
+    "ef960a35-059e-471a-8305-e2a98e0b6384": {},
+    "93582fda-9efd-4d2b-8797-94d5a457dd73": {
+      "payload": "sample_data/list_object_3.dwl"
+    },
+    "45833e52-2c94-4acd-9b0a-1ee25c51b007": {},
+    "57d3383c-d6e4-45ee-aaf6-c3ead95a1cf6": {
+      "vars-FromDate": "sample_data/defaultdatetimetype.dwl"
+    }
+  }
+}

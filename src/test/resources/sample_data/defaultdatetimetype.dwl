@@ -1,0 +1,1 @@
+|2003-10-01T23:57:59Z| as DateTime {encoding: "UTF-8", mediaType: "*/*", mimeType: "*/*", class: "java.time.ZonedDateTime"}

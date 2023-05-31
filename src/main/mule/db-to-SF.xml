@@ -1,0 +1,443 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<flow name="db-to-SFFlow" doc:id="1ef44027-5bef-41b1-b9f7-0eb70716e048" >
+		<http:listener doc:name="Listener" doc:id="ee8ee145-5e2e-4e6d-9216-561368d107c9" path="/readDB" allowedMethods="POST" config-ref="HTTP_Listener_config" outputMimeType="application/json"/>
+		<validation:is-not-null doc:name="Is not null" doc:id="b0aba95c-d4c6-4e67-bb80-b26848ac8cd7" value="#[payload]" message="payload cannot be null" />
+		<choice doc:name="Choice" doc:id="a6e91ea2-9192-4076-a6b2-833437025280" >
+			<when expression="#[payload.listOfIds != null and sizeOf(payload.listOfIds) &gt; 0]">
+				<set-variable value="#[payload.listOfIds]" doc:name="IdList" doc:id="45654cf4-d081-464b-a5cd-7e5e5863a9aa" variableName="IdList" />
+			</when>
+			<otherwise >
+				<set-variable value="#['']" doc:name="IdList" doc:id="1b58ef01-69df-4e13-bb40-d27a417a672f" variableName="IdList"/>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="7ef5352e-deb5-49ef-8038-ef951857a15f" >
+			
+			<when expression="#[payload.FromDate != null and sizeOf(payload.FromDate) &gt; 0]">
+				<set-variable value="#[(payload.FromDate - |P3D|) as String {'format':'yyyy-MM-dd HH:mm:ss'}]" doc:name="startTime= payload.FromDate" doc:id="45833e52-2c94-4acd-9b0a-1ee25c51b007" variableName="startTime" />
+			</when>
+			
+			<otherwise >
+				<set-variable value="#['']" doc:name="startTime" doc:id="451365ad-d7c4-4a6d-80b6-51f84169612d" variableName="startTime"/>
+			</otherwise>
+		</choice>
+		<db:stored-procedure doc:name="Stored procedure" doc:id="f9344151-beed-4dbf-9d50-efb20311b21c" config-ref="Database_Config">
+			<db:sql >CALL schema1.contact_sync_mod(:date,:listOfIds)</db:sql>
+			<db:input-parameters ><![CDATA[#[{'date': vars.startTime,'listOfIds':vars.IdList}]]]></db:input-parameters>
+		</db:stored-procedure>
+		<set-variable value="DBtoSF" doc:name="objectName" doc:id="eae93b39-5fc3-433c-a2d6-5163716176d8" variableName="objectName"/>
+		<db:select doc:name="Select data from contacts for syncing" doc:id="ac50c3e6-e85e-4c83-93a2-f94caceaeade" config-ref="Database_Config">
+			<db:sql >select c.fname,c.lname,c.accountsId,c.email,c.phoneNumber,c.SFId,
+ca.street,ca.city,ca.country,ca.pin 
+from schema1.contacts as c 
+inner join schema1.contact_address as ca on c.email = ca.email
+where c.email IN (select contact_email from schema1.contact_sync) and inactive=1</db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="5802d99c-f940-4212-99ce-4f9ebecffe8b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+var x = {"list":"0032x000006UA9SAAW,0032x000006UA9TAAW"}
+output application/json
+---
+x.list splitBy ","]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="dbContactsData" ><![CDATA[%dw 2.0
+output application/json
+---
+payload map ((value,index) -> {
+	'firstName' : value.fname default '',
+	'lastName' : value.lname default '',
+	'accountId' : value.accountsId default '',
+	'email' : value.email default '',
+	'phone' : value.phoneNumber default '',
+	'Id' : value.SFId default '',
+	'MailingStreet' : value.street default '',
+	'MailingCity' : value.city default '',
+	'MailingCountry' : value.country default '',
+	'MailingPostalCode' : value.pin default ''
+})]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="validateContactsForDB" doc:id="e990d0ff-b49f-4939-b8ee-9949515b37b8" name="validateContactsForDB"/>
+		<choice doc:name="Choice" doc:id="a8a2f2dc-9b4e-4950-84a9-0158175ca893" >
+			<when expression="#[(vars.validContacts != null) and (sizeOf(vars.validContacts) != 0)]">
+				<flow-ref doc:name="processContacts" doc:id="1797229d-d146-41bf-b440-d22496564156" name="processContacts"/>
+				<db:bulk-update doc:name="Bulk update contact" doc:id="b965d364-21c1-4bd6-831a-60573747ae9e" config-ref="Database_Config" target="updatedMetadataResult">
+					<db:sql >update schema1.contacts
+set
+SFId = :Id , lastUpdatedBy = :lastUpdatedBy , lastModifiedByDate = :lastModifiedByDate 
+where email = :email</db:sql>
+				</db:bulk-update>
+				<db:bulk-update doc:name="Bulk update contact_address" doc:id="cedcaa9b-c21f-4702-a7b2-def379ef69fb" config-ref="Database_Config" target="updateContact_AddressResult">
+					<db:sql >update schema1.contact_address
+set contact_id = :Id where email=:email</db:sql>
+				</db:bulk-update>
+				<choice doc:name="Choice" doc:id="5f5ff44b-f746-4921-8323-6dd9bef66475">
+			<when expression="#[sizeOf(payload) == sizeOf(vars.updatedMetadataResult)]">
+						<logger level="INFO" doc:name="Logger" doc:id="97e7f476-9ef0-4d03-b5dc-e59cd4652e63" message="contacts updated successfully"/>
+						<set-payload value="contacts updated successfully" doc:name="Set Payload" doc:id="b5b8c1cc-30bb-40e8-b9a6-c17f4e3960ef" />
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger" doc:id="4e31ca0a-4ba8-43bf-8000-2d6cc31478fd" message="all contacts were not updated successfully"/>
+						<set-payload value="all contacts were not updated successfully" doc:name="Set Payload" doc:id="7afb5319-6d92-417e-8f24-c831a4d2f752" />
+					</otherwise>
+		</choice>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="791ae6bb-0ca4-4e9c-b982-2ba841304a02" message="No valid Contacts for insert/update"/>
+				<set-payload value="No valid Contacts for insert/update" doc:name="Set Payload" doc:id="c5cb4229-c17f-4911-91b5-335d3ed4fc1d" />
+			</otherwise>
+		</choice>
+	</flow>
+	
+	<sub-flow name="validateContactsForDB" doc:id="ad4d0fe2-3e56-460d-a839-e5786d1c2f47" >
+		<salesforce:query doc:name="Query" doc:id="c49326d0-4f71-4a29-a7d9-7069043898d0" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query>select id from Account</salesforce:salesforce-query>
+		</salesforce:query>
+		<choice doc:name="Choice" doc:id="f7dc6829-d455-4182-8c6a-68ea4ce20c11" >
+			<when expression="#[sizeOf(payload) != 0]">
+				<ee:transform doc:name="Transform Message" doc:id="86bb55c6-6c3c-405f-8590-964015bd1d86" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="InvalidContacts" ><![CDATA[%dw 2.0
+output application/json
+---
+(vars.dbContactsData filter ((value,index) -> ! (payload.*Id contains (value.accountId)))) filter (sizeOf($) != 0)]]></ee:set-variable>
+						<ee:set-variable variableName="validContacts" ><![CDATA[%dw 2.0
+output application/json
+---
+(vars.dbContactsData filter ((value,index) -> (payload.*Id contains (value.accountId)))) filter (sizeOf($) != 0)]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<set-variable value="#[vars.dbContactsData]" doc:name="InvalidContacts" doc:id="161dbdae-72d6-47e3-aa9a-9f510691b059" variableName="InvalidContacts"/>
+				<flow-ref doc:name="insertInAuditForDB" doc:id="0a119968-d0f3-469d-b78e-5a71256fd207" name="insertInAuditForDB"/>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="3cc4fd39-7e92-4480-a666-db2c34c90a80" >
+			<when expression="#[(vars.InvalidContacts != null) and (sizeOf(vars.InvalidContacts) != 0)]">
+				<flow-ref doc:name="insertInAuditForDB" doc:id="cbea11e5-9433-48b7-a30e-b3206ab74834" name="insertInAuditForDB"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="209a9797-c81c-4c84-8edc-f225eff5cb61" message="No record found to insert in audit"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="insertInAuditForDB" doc:id="8c9befbc-7c4e-4cff-b94b-8db7caf92d79" >
+		<ee:transform doc:name="Transform Message" doc:id="4c0432f4-8a94-44a0-818d-12f7de22d284" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+
+output application/json
+
+---
+vars.InvalidContact map {
+	(sourceIdString : ($.email default ''++'-'++ $.accountId default '')) if(sizeOf($.Id) == 0),
+	(sourceIdString : ($.Id)) if(sizeOf($.Id) != 0),
+	objectName : vars.objectName,
+	errorMsg : 'Account does not exist',
+	DateCreated : now() as String {'format':'yyyy-MM-dd HH:mm:ss'},
+	DateLastUpdated : now() as String {'format':'yyyy-MM-dd HH:mm:ss'},
+	CreatedBy : 'ETL_User',
+	UpdatedBy : 'ETL_User'
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+		<db:bulk-insert doc:name="Bulk insert" doc:id="88cd2aff-8fb8-4774-983a-3e775a066a9a" config-ref="Database_Config">
+			<db:sql >insert into schema1.contacts_audit
+(sourceIdStr,objectName,errorMsg,DateCreated,DateLastUpdated,CreatedBy,UpdatedBy)
+Values
+(
+:sourceIdString,
+:objectName,
+:errorMsg,
+:DateCreated,
+:DateLastUpdated,
+:CreatedBy,
+:UpdatedBy
+)</db:sql>
+		</db:bulk-insert>
+	
+</sub-flow>
+	<sub-flow name="processContacts" doc:id="078498a5-8bfc-4586-ae7c-f557767224d5" >
+		<ee:transform doc:name="Transform Message" doc:id="4cd64b0d-c68d-4a7a-a5a1-2ee414c0ce5e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="contactsfilteredBySFId" ><![CDATA[%dw 2.0
+var test = [
+	{
+		'name':"a",
+		'sfId':"1"
+	},
+	{
+		'name':"b",
+		'sfId':""
+	},
+	{
+		'name':"c",
+		'sfId':"3"
+	}
+]
+output application/json
+---
+//{
+//insertContacts : test filter (sizeOf($.sfId) == 0),
+//updateContacts : test filter (sizeOf($.sfId) != 0)	
+//}
+{
+insertContacts : (vars.validContacts filter ($.Id == null or sizeOf($.Id) == 0)) default [],
+updateContacts : (vars.validContacts filter ($.Id != null and sizeOf($.Id) != 0)) default []	
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<salesforce:query doc:name="Query" doc:id="9af7efdd-b51f-4e38-ba11-d5e24df65254" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query >select Id from Contact</salesforce:salesforce-query>
+		</salesforce:query>
+		<ee:transform doc:name="Transform Message" doc:id="4c8567bd-a7c8-47b9-bf49-280b0b59b781" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map {
+	SFId : $.Id
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="26a74dd5-2d82-4093-9ddc-7ce4ec621f23" >
+			<when expression="#[(vars.contactsfilteredBySFId.updateContacts != null) and (sizeOf(vars.contactsfilteredBySFId.updateContacts) != 0)]">
+				<ee:transform doc:name="Transform Message" doc:id="5b837f0d-7cb4-4d09-923b-b59b61f32c4a" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+var test = {
+  "insertContacts": [
+    {
+      "name": "b",
+      "sfId": ""
+    }
+  ],
+  "updateContacts": [
+    {
+      "name": "a",
+      "sfId": "1"
+    },
+    {
+      "name": "c",
+      "sfId": "3"
+    }
+  ]
+}
+var testPayload = [
+	{
+		'SFId' : "1"
+	},
+	{
+		'SFId' : "2"
+	}
+]
+output application/json
+---
+//{
+//update :	((test.updateContacts filter (testPayload.SFId contains ($.sfId))) filter (sizeOf($) != 0)) default [],
+//insert : 	(((test.updateContacts filter !(testPayload.SFId contains ($.sfId))) filter (sizeOf($) != 0)) default []) ++ (test.insertContacts default []) 
+//			
+//}
+
+{
+update :	((vars.contactsfilteredBySFId.updateContacts filter (payload.SFId contains ($.Id))) filter (sizeOf($) != 0)) default [],
+insert : 	(((vars.contactsfilteredBySFId.updateContacts filter !(payload.SFId contains ($.Id))) filter (sizeOf($) != 0)) default []) ++ (vars.contactsfilteredBySFId.insertContacts default [])
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="31eedb7a-9ff2-4fd0-800f-9b98d8b4f80e" message="No Contacts to update in salesforce"/>
+				<ee:transform doc:name="Transform Message" doc:id="a3998b35-8c5f-4048-8437-d3d94768b77b" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+update :	vars.contactsfilteredBySFId.updateContacts default [],
+insert : 	(vars.contactsfilteredBySFId.insertContacts default [])
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<salesforce:upsert type="Contact" doc:name="Upsert" doc:id="8db06f36-b529-4ff5-a99a-a713d25a974a" config-ref="Salesforce_Config" externalIdFieldName="Id" target="upsertResult">
+			<salesforce:records ><![CDATA[#[payload.insert ++ payload.update]]]></salesforce:records>
+		</salesforce:upsert>
+		
+		<ee:transform doc:name="Transform Message" doc:id="076261bd-3087-416f-9410-132b8d669e35" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+var a = [
+	{'email':"1"},
+	{'email':"2"},
+	{'email':"3"}
+]
+var b = [{}
+]
+var c =[
+  {
+    "firstName": "James",
+    "lastName": "Potter",
+    "accountId": "0012x000003satJAAQ",
+    "email": "J@P.com",
+    "phone": "987654321",
+    "Id": ""
+  },
+  {
+    "firstName": "Lily",
+    "lastName": "Potter",
+    "accountId": "0012x000003satJAAQ",
+    "email": "sean@edge.com",
+    "phone": "9876589",
+    "Id": ""
+  },
+  {
+    "firstName": "Ginny",
+    "lastName": "weasley",
+    "accountId": "0012x000003satJAAQ",
+    "email": "G@W.com",
+    "phone": "986453898",
+    "Id": ""
+  },
+  {
+    "firstName": "Lucius",
+    "lastName": "Malfoy2",
+    "accountId": "0012x000003satJAAQ",
+    "email": "L@M.com",
+    "phone": "9857478872",
+    "Id": ""
+  },
+  {
+    "firstName": "Neville",
+    "lastName": "Longbottom2",
+    "accountId": "0012x000003satJAAQ",
+    "email": "rose@edge.com",
+    "phone": "99999999999",
+    "Id": ""
+  },
+  {
+    "firstName": "Tom",
+    "lastName": "Riddle",
+    "accountId": "0012x000003satHAAQ",
+    "email": "jrogers@burlington.com",
+    "phone": "645928582",
+    "Id": ""
+  },
+  {
+    "firstName": "Rubius",
+    "lastName": "Hagrid",
+    "accountId": "0012x000003satJAAQ",
+    "email": "",
+    "phone": "",
+    "Id": ""
+  },
+  [
+    
+  ]
+]
+output application/json
+---
+//(payload.insert ++ payload.update) 
+//(c.*email) filter (sizeOf($) !=0) as String 
+((payload.insert ++ payload.update) map (value,index) -> {
+	email:value.email as String ,
+	Id: vars.upsertResult[index].id as String default '',
+	lastUpdatedBy : vars.objectName,
+	lastModifiedByDate : now() as String {'format':'yyyy-MM-dd HH:mm:ss'}  
+}) filter (sizeOf($.email) != 0)
+
+
+
+]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+	</sub-flow>
+	<flow name="db-to-SFFlow1" doc:id="fb15be3c-285b-4f18-b96d-59e71e316ab4" >
+		<scheduler doc:name="Scheduler" doc:id="a21cc7d5-eacb-41aa-96e6-8e41e6e812f2" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="30" timeUnit="MINUTES" startDelay="3"/>
+			</scheduling-strategy>
+		</scheduler>
+		<http:request method="GET" doc:name="Request" doc:id="eb3c2862-14bb-46d8-b0f3-b069825c1244" config-ref="HTTP_Request_configuration" path="/getJobLock/{objectName}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"objectName" : "DBtoSF"
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="48564ee6-401e-4c0a-9a73-8a835e173299" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="36ac9139-dbe0-4520-8fe5-14a1bd57146f" >
+			<when expression="#[payload != null and payload.JobLock == 0]">
+				<set-variable value="#[payload.startTime as String {'format':'yyyy-MM-dd HH:mm:ss'}]" doc:name="startTime" doc:id="ad9386de-67ac-43de-ab6b-da0093d7a546" variableName="startTime"/>
+				<db:update doc:name="Update JobLock to 1" doc:id="b8344565-c357-41b8-a018-99c71879db12" config-ref="Database_Config" target="updateJobDataTo1Result">
+					<db:sql >update schema1.control
+set JobLock = 1 where objectName = 'DBtoSF'</db:sql>
+				</db:update>
+				<http:request method="POST" doc:name="Request" doc:id="184b8b34-e0d5-43a8-acec-d451dcd01814" config-ref="HTTP_Request_configuration" path="/readDB" responseTimeout="60000">
+					<http:body ><![CDATA[#[output application/json --- {'FromDate':payload.FromDate}]]]></http:body>
+				</http:request>
+				<db:update doc:name="Update joblock =0" doc:id="521f5803-4114-4a60-9ab1-de81deb7c8c8" config-ref="Database_Config">
+					<db:sql >update schema1.control
+set
+JobLock = 0 , FromDate = :startTime , ToDate = :endTime
+where objectName = 'DBtoSF'</db:sql>
+					<db:input-parameters ><![CDATA[#[{'startTime':vars.startTime,'endTime':now() as String {'format':'yyyy-MM-dd HH:mm:ss'}}]]]></db:input-parameters>
+				</db:update>
+				<logger level="INFO" doc:name="Logger" doc:id="efdc0ba0-8e63-45af-a99f-38c4c1bfa965" message="#[output application/json --- {message : 'DBtoSF job completed 
+successfully : finished at ' ,
+endTime : now() as String {'format':'yyyy-MM-dd HH:mm:ss'} }]" />
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="e7f84540-1344-4877-ba5b-a39bdbb17f2c" message='Another job for "DBtoS3" is in running state hence skipping this'/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="fad4dfd5-1812-45fd-a5f8-5d73985081a4" type="ANY">
+				<db:update doc:name="Update" doc:id="ee8667f8-a5d8-4187-bc16-81b8589a1f90" config-ref="Database_Config">
+					<db:sql >update schema1.control
+set
+JobLock = 0 where objectName = 'DBtoSF'</db:sql>
+				</db:update>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>

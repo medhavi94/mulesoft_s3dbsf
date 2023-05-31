@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd">
+	<flow name="getJobLock-StartTime" doc:id="3264691f-4ebd-4d24-97e2-6a7f1d5056d2" >
+		<http:listener doc:name="Listener" doc:id="f41b76be-fc10-4122-b1fa-dd1fbdb624b1" config-ref="HTTP_Listener_config" path="/getJobLock/{objectName}"/>
+		<db:select doc:name="Select jobLock from control table" doc:id="d771c3af-f2ff-4ce3-b1d7-939f27f2885d" config-ref="${db.config}">
+			<db:sql >select JobLock,FromDate from schema1.control where objectName = :objectName</db:sql>
+			<db:input-parameters ><![CDATA[#[objectName : attributes.uriParams.'objectName']]]></db:input-parameters>
+		
+</db:select>
+		<set-variable value="#[now()]" doc:name="startTime" doc:id="f86851c4-0902-4481-ab91-ae06f31e3d33" variableName="startTime"/>
+		<ee:transform doc:name="Transform Message" doc:id="75183035-2dcb-49e1-a555-9c93ccb9566d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	'JobLock':payload.JobLock[0], 
+	'FromDate':payload.FromDate[0] ,
+	'startTime':vars.startTime
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	
+</flow>
+
+</mule>

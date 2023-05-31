@@ -1,0 +1,55 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<types:mule xmlns:types="http://www.mulesoft.org/schema/mule/types">
+  <types:catalog>
+    <types:type name="contacts" format="csv">
+      <types:shape format="weave" example="examples/Contact.csv"><![CDATA[%dw 2.0
+
+type contacts = Array<{|  Id: String,   IsDeleted: String,   MasterRecordId: String,   AccountId: String,   Salutation: String,   FirstName: String,   LastName: String,   OtherStreet: String,   OtherCity: String,   OtherState: String,   OtherPostalCode: String,   OtherCountry: String,   OtherLatitude: String,   OtherLongitude: String,   OtherGeocodeAccuracy: String,   MailingStreet: String,   MailingCity: String,   MailingState: String,   MailingPostalCode: String,   MailingCountry: String,   MailingLatitude: String,   MailingLongitude: String,   MailingGeocodeAccuracy: String,   Phone: String,   Fax: String,   MobilePhone: String,   HomePhone: String,   OtherPhone: String,   AssistantPhone: String,   ReportsToId: String,   Email: String,   Title: String,   Department: String,   AssistantName: String,   LeadSource: String,   Birthdate: String,   Description: String,   OwnerId: String,   HasOptedOutOfEmail: String,   HasOptedOutOfFax: String,   DoNotCall: String,   CreatedDate: String,   CreatedById: String,   LastModifiedDate: String,   LastModifiedById: String,   SystemModstamp: String,   LastActivityDate: String,   LastCURequestDate: String,   LastCUUpdateDate: String,   EmailBouncedReason: String,   EmailBouncedDate: String,   Jigsaw: String,   JigsawContactId: String,   CleanStatus: String,   IndividualId: String,   Level__c: String,   Languages__c: String,   Location__Latitude__s: String,   Location__Longitude__s: String,   Stage__c: String|}>
+
+]]></types:shape>
+      <types:properties>
+        <types:property name="headerLineNumber" value="0"/>
+        <types:property name="header" value="true"/>
+        <types:property name="isQuotedString" value="false"/>
+      </types:properties>
+    </types:type>
+    <types:type name="accountIds" format="json">
+      <types:shape format="weave" example="examples/accountIds-1.json"><![CDATA[%dw 2.0
+
+type accountIds = Array<{| AccountId: String |}> {"example": "[{\\\"AccountId\\\":\\\"1\\\"},{\\\"AccountId\\\":\\\"2\\\"},{\\\"AccountId\\\":\\\"3\\\"},{\\\"AccountId\\\":\\\"4\\\"}]"}
+
+]]></types:shape>
+    </types:type>
+    <types:type name="date" format="java">
+      <types:shape format="raml"><![CDATA[#%RAML 1.0 DataType
+type: datetime]]></types:shape>
+    </types:type>
+    <types:type name="contactCSV" format="csv">
+      <types:shape format="weave" example="examples/Contact-1.csv"><![CDATA[%dw 2.0
+
+type contactCSV = Array<{|  AccountId: String,   FirstName: String,   LastName: String,   Phone: String,   Email: String,   Street: String,   City: String,   Country: String,   Pin: String|}>
+
+]]></types:shape>
+      <types:properties>
+        <types:property name="headerLineNumber" value="0"/>
+        <types:property name="header" value="true"/>
+        <types:property name="isQuotedString" value="false"/>
+      </types:properties>
+    </types:type>
+  </types:catalog>
+  <types:enrichment select="#0596446b-e1b2-47a0-8fc1-bb3a973276a6">
+    <types:processor-declaration>
+      <types:input-event>
+        <types:message>
+          <types:payload type="contactCSV[]"/>
+        </types:message>
+      </types:input-event>
+    </types:processor-declaration>
+  </types:enrichment>
+  <types:enrichment select="#77c81f7f-4924-4c1e-8994-849b11f3e22b"/>
+  <types:enrichment select="#8dfe4c1f-8935-4815-8bbe-8ce3700f68e8"/>
+  <types:enrichment select="#ef960a35-059e-471a-8305-e2a98e0b6384"/>
+  <types:enrichment select="#5b837f0d-7cb4-4d09-923b-b59b61f32c4a"/>
+  <types:enrichment select="#076261bd-3087-416f-9410-132b8d669e35"/>
+  <types:enrichment select="#29dbaf2c-bedc-4cda-ba67-118328248aea"/>
+</types:mule>
